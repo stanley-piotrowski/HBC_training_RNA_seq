@@ -1,0 +1,98 @@
+---
+title: "Differential Gene Expression Analysis"
+output:
+  html_notebook:
+    toc: true
+    toc_float: true
+    theme: cerulean
+---
+
+## Part I: Getting Started
+
+### 1. Workflow: raw data to counts
+
+The basic overview of an RNA-seq experiment involves sample and library preparation, sequencing, sequencing data QC, and expression quantification, followed by differential gene expression and functional analyses.  
+
+Some notes on each of these processes are highlighted below:
+
+* __Sample and library preparation__
+
+  * The first step in sample and library preparation is RNA extraction, which is generally achieved by isolating total RNA from a sample and treating with DNAse to digest any genomic DNA.
+  * From here, many protocols utilize a messenger RNA (mRNA) enrichment step, or a ribosomal RNA (rRNA) depletion step, as rRNA is much more abundant in many cell types and can dominate reads from RNA-seq experiments.
+  * There are two general enrichment strategies: poly-A selection, which target the poly-A tails of mRNA molecules using oligo-dT primers conjugated to magnetic beads that can be used in pull-down assays; and rRNA removal via hybridization with engineered oligos conjugated to biotin beads, which are used to extract the rRNA and purify the remaining RNA.
+  * There are advantages and disadvantages to both strategies: in the mRNA enrichment strategy via poly-A selection, the 3'-end of the transcripts may be targeted more, and this approach also fails to purify other RNA species of interest (e.g., micro RNAs, etc); however, if the focus is solely on protein-encoding genes, this may be an appropriate choice.
+  * Additional considerations for both methods can be found on the [RNA-seq blog](https://www.rna-seqblog.com/ribo-depletion-in-rna-seq-which-ribosomal-rna-depletion-method-works-best/).
+  * Following RNA extraction and target enrichment, the next critical step is to evaluate the quality of the purified RNA
+  * This can be accomplished using a variety of approaches, including: ultraviolet (UV) light absorbance, as nucleic acids absorb light mainly at 260 nm, and the technique can be used to detect the amount of contaminating protein in the sample (280 nm), as well as organic compounds left over from the extraction (230 nm); fluorescence methods, which use dyes that bind to nucleic acids and known reference standards (e.g., Qubit); agarose gel electrophoresis (although this approach isn't used as frequently);  the Agilent BioAnalyzer, which uses capillary electrophoresis to generate a size distribution of nucleic acid present in the sample, as well as concentration; and finally, real-time quantitative PCR (RT-qPCR), but this method may require optimization and thus may not be preferred during initial QC steps prior to library preparation.
+  * Next, purified RNAs must be fragmented for compatability with Illumina sequencing chemistry, and this is typically accomplished by adding RNAses for a specific amount of time or physical shearing (e.g., sonication).
+  * The resulting fragments undergo a size-selection process, typically using magnetic beads (specific insert sizes can be purified using gel isolation).
+  * Following size selection, an additional QC step can be performed using the Agilent BioAnalyzer to evaluate the distribution of fragment sizes (additional rounds of fragmentationa and BioAnalyzer QC may be necessary to obtain the desired size distribution).
+  * Next, double-stranded complimentary DNA (cDNA) is generated in a reverse transcription reaction, sequencing adapters are ligated onto the cDNA fragments, and the resulting pool of molecules are used in a PCR amplification reaction to increase the amount of starting material.  
+  * Once the final library has been size-selected and purified, RT-qPCR will be used to quantify the concentration of library fragments with Illumina adapter sequences (i.e., those fragments that will actually bind to the Illumina flow cell), and each library will be pooled (if multiple libraries will be multiplexed).
+  * An overall schematic of the RNA-seq sample and library preparation procedure is presented below (photo courtesy of [RNA-seq blog](https://www.rna-seqblog.com/introduction-to-rna-sequencing-and-analysis/)).
+
+<p align="center">
+<img src="https://www.rna-seqblog.com/wp-content/uploads/2015/07/experiment.png"
+alt="RNA-seq sample and library preparation workflow.">
+</p>
+
+* __Sequencing__
+
+  * Illumina uses a sequencing-by-synthesis technology to generate sequencing data for each molecule.
+  * To start, the cDNA libraries are denatured with sodium hydroxide (NaOH) and hybridized to the complimentary oligos on the surface of the flow cell.
+  * Upon hybridization, cluster generation begins by amplifying clonal fragments, such that (in patterned flow cells), each nanowell receives one starting molecule and subsequently generates a clonal library with enough DNA molecules present to generate a detectable signal. 
+  * Following cluster generation, the sequencing portion of the workflow begins, and fluorescently-labeled nucleotides with terminator elements are added, one base at a time, over the entire flow cell.
+  * After the incorporation of each base, a laser excites the fluorophore, leading to a characteristic emission signal that is captured by a camera.
+  * Software translates the intensity of the signal into digital data in the form of a base call and a probability that the call was incorrect.  
+  * The terminator is cleaved, washed away, and a new fluorescently-labeled nucleotide is washed over the flow cell. 
+  * An overview of the sequencing-by-synthesis process is shown below (photo courtesy of [Harvard Chan Bioinformatics Core Training](https://hbctraining.github.io/Intro-to-ChIPseq/lessons/02_QC_FASTQC.html)), from starting material through image acquisition and base calling.
+  
+<p align="center">
+<img src="https://hbctraining.github.io/Intro-to-ChIPseq/img/sbs_illumina.png"
+alt="Overview of Illumina sequencing-by-synthesis process.">
+</p>
+  
+* __Quality control of raw sequencing data (FastQC)__
+
+  * During each sequencing cycle, Illumina generates a BCL basecall file, which is then converted to a FASTQ file for subsequent analysis.
+  * The FASTQ file contains information about the sequencer and the flow cell (e.g., flow cell ID, X and Y coordinates of the sample, etc.), the read sequence, a "+" sign, and quality information denoting the probability of an incorrect base call at a given position.  
+  
+
+### 2. Experimental design considerations
+
+### 3. Intro to DGE/setting up DGE analysis
+
+## Part II: QC and setting up for DESeq2
+
+### 1. RNA-seq counts distribution
+
+### 2. Count normalization
+
+### 3. Sample-level QC
+
+### 4. Design formulas
+
+### 5. Hypothesis testing and multiple test correction
+
+## Part III: DESeq2
+
+### 1. Description of steps for DESeq2
+
+### 2. Wald test results
+
+### 3. Summarizing results and extracting significant gene lists
+
+### 4. Visualization
+
+### 5. Likelihood Ratio Test Results
+
+### 6. Time Course Analysis
+
+## Part IV: Functional Analysis
+
+### 1. Gene Annotation
+
+### 2. Functional Analysis I: Over-Representation Analysis
+
+### 3. Functional Analysis II: Functional Class Scoring/GSEA  
+
