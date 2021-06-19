@@ -31,10 +31,12 @@ Some notes on each of these processes are highlighted below:
   * Once the final library has been size-selected and purified, RT-qPCR will be used to quantify the concentration of library fragments with Illumina adapter sequences (i.e., those fragments that will actually bind to the Illumina flow cell), and each library will be pooled (if multiple libraries will be multiplexed).
   * An overall schematic of the RNA-seq sample and library preparation procedure is presented below (photo courtesy of [RNA-seq blog](https://www.rna-seqblog.com/introduction-to-rna-sequencing-and-analysis/)).
 
+<br>
 <p align="center">
 <img src="https://www.rna-seqblog.com/wp-content/uploads/2015/07/experiment.png"
 alt="RNA-seq sample and library preparation workflow.">
 </p>
+<br>
 
 * __Sequencing__
 
@@ -46,17 +48,63 @@ alt="RNA-seq sample and library preparation workflow.">
   * Software translates the intensity of the signal into digital data in the form of a base call and a probability that the call was incorrect.  
   * The terminator is cleaved, washed away, and a new fluorescently-labeled nucleotide is washed over the flow cell. 
   * An overview of the sequencing-by-synthesis process is shown below (photo courtesy of [Harvard Chan Bioinformatics Core Training](https://hbctraining.github.io/Intro-to-ChIPseq/lessons/02_QC_FASTQC.html)), from starting material through image acquisition and base calling.
-  
+
+<br>
 <p align="center">
 <img src="https://hbctraining.github.io/Intro-to-ChIPseq/img/sbs_illumina.png"
 alt="Overview of Illumina sequencing-by-synthesis process.">
 </p>
+<br>
   
 * __Quality control of raw sequencing data (FastQC)__
 
   * During each sequencing cycle, Illumina generates a BCL basecall file, which is then converted to a FASTQ file for subsequent analysis.
-  * The FASTQ file contains information about the sequencer and the flow cell (e.g., flow cell ID, X and Y coordinates of the sample, etc.), the read sequence, a "+" sign, and quality information denoting the probability of an incorrect base call at a given position.  
-  
+  * The FASTQ file contains information about the sequencer and the flow cell (e.g., flow cell ID, X and Y coordinates of the sample, etc.), the read sequence, a "+" sign, and quality information denoting the probability of an incorrect base call at a given position. 
+  * An example FASTQ file is given below, detailing the various metadata in the FASTQ file header (image courtesy of [databricks](https://databricks.com/blog/2016/05/24/parallelizing-genome-variant-analysis.html))
+
+<br>
+<p align="center">
+<img src="https://databricks.com/wp-content/uploads/2016/05/FASTQ-format-1024x202.png" alt="Example FASTQ file.">
+</p>
+<br>
+
+  * FastQC is a tool for evaluating the quality of sequencing data, giving the user basic statistics such as the distribution of quality scores across the length of the reds, per base N content (i.e., no call), and the number and identity of overrepresented sequences that could be caused by contamination from the library preparation process (e.g., adapter dimer contamination).
+
+* __Quantify expression__
+
+  * After evaluating the quality of sequence data and identifying any potential issues that could cause problems downstream, the next step is to quantify the expression of each transcript.
+  * In other words, the goal is to identify which genes (or targets, more generally), each read is derived from.
+  * Splice-aware alignment software exists to align RNA-seq reads to a reference genome (e.g., HISAT2 and STAR), as RNA-seq reads may span exon-exon junctions that cannot be mapped using short-read aligners common in DNA sequencing approaches.
+  * Other alignment tools are so called "lightweight" in that they don't rely on direct alignment to a reference genome- some of the popular software programs in this cateogry are Salmon, Kallisto, and Sailfish.
+  * [Salmon](https://combine-lab.github.io/salmon/) works by quasi-mapping RNA-seq reads to a reference transcriptome, essentially bypassing the computation of trying to align reads to each of several possible mapping positions in a reference genome and quantifying how well it matches to each position; instead, it just generates counts directly from the reference transcriptome.
+  * [Sailfish](http://www.cs.cmu.edu/~ckingsf/software/sailfish/) uses a similar approach, instead using k-mers and a set of reference sequences (e.g., a reference transcriptome) to generate abundance estimates without aligning to a reference genome.
+  * [Kallisto](https://pachterlab.github.io/kallisto/about) uses an approach called pseudoalignment, in which only the transcripts from which RNA-seq reads would have originated from are considered, without regard for how the reads and reference transcriptome align to generate abundance estimates.
+
+* __Quality control of aligned sequence reads (STAR/Qualimap)__
+
+  * Although for this tutorial we'll be using the abundance estimates generated from Salmon, it is still important to evaluate how well the RNA-seq reads map to a reference genome.
+  * This can be accomplished using splice-aware aligners like STAR or HiSAT2, both of which can generate binary alignment map (BAM) files.
+  * BAM files are the compressed version of the sequence alignment/map format file (SAM), which describes the alignment of reads to a reference with two sections: the header section, which contains metadata like the read name, read length, and the alignment method; and an alignment section, with data on the read name, sequence, quality, and additioanl alignment information (e.g., chromosome, start coordinate, and alignment quality).
+  * We can use the tool Qualimap to provide summary information for each BAM file, similar to how FastQC is used to evaluate potential issues with sequencing data.
+  * For example, a screenshot is given below demonstrating how Qualimap can be used to evaluate the distribution of coverage across a reference for a given BAM file.
+
+<br>
+<p align="center">
+<img src="http://qualimap.conesalab.org/img/screenshot_bamqc_coverage.png" alt="Example screenshot of the coverage across reference using Qualimap">
+</p>
+<br>
+
+* __Quality control: aggregating results with MultiQC__
+
+  * [MultiQC](https://multiqc.info/) is a program that can be used to aggregate the results from various bioinformatics QC analyses (e.g., FastQC, Qualimap, alignment log files, etc.) for each sample into a single HTML report.
+  * Briefly, the user will run MultiQC in an analysis directory containing all of the QC and log files and generate a single HTML report with all samples aggregated together to identify any patterns or outliers that may warrant investgiation before proceeding with subsequent analyses.
+  * An example screenshot from a MultiQC HTML report shows an  plot where the user can interactively investigate the GC content per sequence. 
+
+<br>
+<p align="center">
+<img src="https://multiqc.info/docs/images/toolbox_highlight.png" alt="Example screenshot of a MultiQC HTML report showing an interactive plot of the GC content per sequence.">
+</p>
+<br>
 
 ### 2. Experimental design considerations
 
