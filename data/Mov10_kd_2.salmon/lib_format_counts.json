@@ -1,0 +1,21 @@
+{
+    "read_files": "/n/groups/hbctraining/ngs-data-analysis-longcourse/rnaseq/full_dataset/Mov10_kd_2.fastq",
+    "expected_format": "SR",
+    "compatible_fragment_ratio": 1.0,
+    "num_compatible_fragments": 45319634,
+    "num_assigned_fragments": 45319634,
+    "num_frags_with_consistent_mappings": 45319411,
+    "num_frags_with_inconsistent_or_orphan_mappings": 541,
+    "MSF": 0,
+    "OSF": 0,
+    "ISF": 0,
+    "MSR": 0,
+    "OSR": 0,
+    "ISR": 0,
+    "SF": 541,
+    "SR": 45319411,
+    "MU": 0,
+    "OU": 0,
+    "IU": 0,
+    "U": 0
+}

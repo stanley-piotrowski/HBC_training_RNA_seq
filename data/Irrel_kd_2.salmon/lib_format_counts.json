@@ -1,0 +1,21 @@
+{
+    "read_files": "/n/groups/hbctraining/ngs-data-analysis-longcourse/rnaseq/full_dataset/Irrel_kd_2.fastq",
+    "expected_format": "SR",
+    "compatible_fragment_ratio": 1.0,
+    "num_compatible_fragments": 26516543,
+    "num_assigned_fragments": 26516543,
+    "num_frags_with_consistent_mappings": 26516359,
+    "num_frags_with_inconsistent_or_orphan_mappings": 494,
+    "MSF": 0,
+    "OSF": 0,
+    "ISF": 0,
+    "MSR": 0,
+    "OSR": 0,
+    "ISR": 0,
+    "SF": 494,
+    "SR": 26516359,
+    "MU": 0,
+    "OU": 0,
+    "IU": 0,
+    "U": 0
+}

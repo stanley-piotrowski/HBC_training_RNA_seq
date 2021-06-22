@@ -7,6 +7,15 @@ output:
     theme: cerulean
 ---
 
+```{r setup, warning = FALSE, message = FALSE}
+# Load libraries
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(kableExtra)
+```
+
+
 ## Part I: Getting Started
 
 ### 1. Workflow: raw data to counts
@@ -108,7 +117,126 @@ alt="Overview of Illumina sequencing-by-synthesis process.">
 
 ### 2. Experimental design considerations
 
+This section highlights factors to consider when designing RNA-seq experiments, particularly with regard to replicates and achieving the desired sequencing depth and coverage for the desired anlyses.
+
+Some notes for each section are presented below:
+
+* __Replicates__
+
+  * Technical replicates are replicate samples obtained from the same specimen to measure technical variation associated with a particular process (e.g., taking three DNA samples from the same mouse to measure technical variation in an assay).
+  
+  * Biological replicates are different samples taken from the same condition with the goal of measuring biological variability (e.g., taking three DNA samples from separate mice to measure biological variation between samples with a given assay).
+  
+  * In this tutorial, the authors suggest that technical replicates are not necessary, but biological replicates are necessary in order to detect meaningful differences in the gene expression between treatments. 
+  
+  * Further, when considering trade-offs between sequencing depth and biological replicates, the authors demonstrate with published data that biological replicates will identify more differentially expressed genes relative to simply increasing the sequencing depth (i.e., the number of reads per sample).
+  
+  * However, there are other factors to consider when designing the experiment- e.g., if a goal is to measure lowly expression differentially expressed genes, generally a greater sequencing depth is needed than would be recommended for a more general approach.
+  
+  * Coverage, a term used to describe how many times (on average) each position in a genome has been sequenced, is not used in RNA-seq experiments because gene expression is highly variable.  
+  
+* __Confounding__
+
+  * Confounding refers to situations in which a researcher cannot distinguish between biological variation and technical variation (e.g., all male mice were used in a control group and all female mice were used in an experimental group).
+  
+* __Batch effects__ 
+
+  * Batch effects refer to situations where you have additional confounding variables related to components of the workflow- for example, sequencing all samples from a particular species on one flow cell, and all samples from another species on a different flow cell, when trying to compare transcriptional activity at the same genes across species.
+  
+  * Gilan and Mizrahi-Man (2015; F1000 Research) highlighted that when reviewing mouse ENCODE comparative gene expression data between mouse and human, data tended to cluster more by species than by tissue type- however, it was noted that each species was sequenced separately, thus introducing bias in the form of a batch effect.  Below is a figure showing a principal components analysis and heatmap using hierchical clustering of the original data.
+  
+<p align="center">
+<img src="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4516019/bin/f1000research-4-7019-g0001.jpg"
+alt = "PCA and heatmap of original comparative gene expression data between mouse and human from Gilan and Mizrahi-Man 2015 demonstrating the batch effect.">
+</p>
+
+  * After accounting for the batch effect (introduced by sequencing human and mouse tissue samples on the same sequencing lane as their respective species), the data clustered by tissue as expected.  Below is a figure showing the same analyses with the data after accounting for the batch effect.
+  
+<p align="center">
+<img src="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4516019/bin/f1000research-4-7019-g0002.jpg"
+alt="PCA and heatmap of comparative gene expression data between mouse and human, after accounting for batch effects, from Gilan and Mizrahi-Man 2015.">
+</p>
+
+  * The authors recommend that if batch effects can't be avoided, researchers should exercise caution to avoid confounding in experimental group allocation.
+  
+  * Additionally, it is recommended to include the batch ID (e.g., a numeric value) in experimental metadata so that during normal QC steps, if potential batch effects are identified, they can be accounted for with linear regression or similar techniques.  
+  
+* __Exercise__ 
+
+1) Fill in a group value in the `rna_isolation` field in the Excel file from the training GitHub page (linked [here](https://hbctraining.github.io/DGE_workshop_salmon_online/lessons/experimental_planning_considerations.html)).  The idea is to: a) randomly allocate group treatment for RNA isolation; and b) give equal numbers of RNA isolations for each researcher.  For both of these tasks, we'll create a vector of possible assignments (e.g., `group1` through `group6`), repeat twice (there are 12 total samples), and then use `sample()` to create a vector of randomly drawn group assignments that we can use in the `rna_isolation` field, for example.
+
+```{r part1-ex1}
+# Create data directory
+dir.create("./metadata")
+
+# The file was downloaded manually from GitHub and moved into the metadata directory
+
+# Import the Excel file and use the janitor package to tidy the field names
+exp_design_table <- read_excel("./metadata/exp_design_table.xlsx") %>% 
+  clean_names()
+
+# Now we want to allocate the group assignments
+# We'll define a vector of groups from 1 to 6, repeated twice, and then use sample() to generate a random assignment to allocate different samples to rna_isolation groups
+groups <- c(paste("group", 1:6, sep = "")) %>% 
+  rep(2) %>% 
+  sample(size = 12, replace = FALSE)
+
+# Now we'll do the same thing to assign rna_isolations for each researcher
+researcher <- c("AB", "CD") %>% 
+  rep(6) %>% 
+  sample(size = 12, replace = FALSE)
+
+# Add the random group and researcher assignments to the data frame
+exp_design_table <- exp_design_table %>% 
+  mutate(rna_isolation = groups, 
+         researcher = researcher)
+  
+# Print out the results
+exp_design_table %>% 
+  kbl(caption = "Experimental design table after random assignment to one of six RNA isolation groups and one of two researchers to control for batch effects.") %>% 
+  kable_styling(full_width = FALSE) %>% 
+  kable_classic_2()
+
+```
+
+
 ### 3. Intro to DGE/setting up DGE analysis
+
+This section describes the basic workflow of an RNA-seq experiment, the objectives and motivations behind the experiment, and how to set up analyses to evaluate differences in gene expression.  
+
+Notes for each section are presented below:
+
+* __Different gene expression analysis__
+
+  * The basic workflow in this notebook is to take the pseudocounts generated from the different lightweight alignment programs (e.g., Salmon) and convert them to counts of genes, perform QC on these data through normalization and unsupervised clustering to detect potential batch effects (e.g., principal components analysis; PCA), and then perform the differential expression analyses.  
+  
+* __Review of the dataset__
+
+  * The dataset that will be used in this tutorial is from Kenny et al. 2014 (found [here](https://pubmed.ncbi.nlm.nih.gov/25464849/)) in which the authors compare the expression of MOV10 in three different groups: MOV10 over-expression, in which HEK293F (human epithelial kidney cells) were transfected with a MOV10 transgene; MOV10 knockdown, in which a short interfering RNA (siRNA) was used to knock out MOV10 expression; and in which siRNA created a MOV10 knockdown via non-specific knock out.  
+  
+  * Importantly, each replicate has three replicates.
+  
+  * MOV10 associates with the fragile X mental retardation protein (FMRP), a protein responsible for normal cognitive development, but which is absent in the brain of those with Fragile X syndrome.
+  
+  * The authors hypothesized that MOV10 and FMRP act in coordination to suppress translation of bound RNAs, which may be implicated in the disease. 
+  
+  * In this analysis, we are mainly trying to identify patterns gene expression depending on the gain or loss of function of MOV10, and if there are genes with similar expression patterns shared between treatments. 
+  
+  * The data for the analysis were downloaded from the Sequence Read Archive (SRA) and processed using the steps defined in the above sections.
+  
+* __Setting up__
+
+To set up for the differential expression analyses, we need to download the Salmon results from the full dataset from [this](https://hbctraining.github.io/DGE_workshop_salmon_online/lessons/01b_DGE_setup_and_overview.html) page by right-clicking and saving the zipped directory directly into the project directory.  We can then unzip the directory, which will create a new `data` directory with subdirectories for each sample.  Next, we'll need to download the annotation file to map the transcripts to the genes.  We can download this text file from of the HBC's GitHub repositories [here](https://github.com/hbctraining/DGE_workshop_salmon/blob/master/data/tx2gene_grch38_ens94.txt).
+
+```{r salmon-data-import}
+# Unzip the data.zip directory
+unzip("./data.zip")
+
+# Remove the unwanted directories and the old data.zip directory
+unlink(c("__MACOSX/", "data.zip"),
+       recursive = TRUE)
+```
+
 
 ## Part II: QC and setting up for DESeq2
 

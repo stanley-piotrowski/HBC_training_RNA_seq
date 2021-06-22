@@ -1,0 +1,10 @@
+{
+    "salmon_version": "0.10.2",
+    "index": "/n/groups/hbctraining/ngs-data-analysis-longcourse/rnaseq/salmon.ensembl38.idx",
+    "libType": "A",
+    "unmatedReads": "/n/groups/hbctraining/ngs-data-analysis-longcourse/rnaseq/full_dataset/Mov10_kd_3.fastq",
+    "output": "results/salmon/Mov10_kd_3.fastq.salmon",
+    "writeMappings": "results/salmon/Mov10_kd_3.fastq_salmon.out",
+    "useVBOpt": [],
+    "auxDir": "aux_info"
+}
