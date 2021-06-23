@@ -199,7 +199,6 @@ exp_design_table %>%
 
 ```
 
-
 ### 3. Intro to DGE/setting up DGE analysis
 
 This section describes the basic workflow of an RNA-seq experiment, the objectives and motivations behind the experiment, and how to set up analyses to evaluate differences in gene expression.  
@@ -235,8 +234,151 @@ unzip("./data.zip")
 # Remove the unwanted directories and the old data.zip directory
 unlink(c("__MACOSX/", "data.zip"),
        recursive = TRUE)
+
+# Download the annotation file from the GitHub repository
+download.file("https://raw.githubusercontent.com/hbctraining/DGE_workshop_salmon_online/master/data/tx2gene_grch38_ens94.txt", 
+              destfile = "./metadata/tx2gene_grch28_ens94.txt")
 ```
 
+Now that we've downloaded all of the Salmon output files and the annotation file, we need to load the libraries from CRAN and Bioconductor.  Note, any Bioconductor packages need to be installed using the command `Biocmanager::install(<packagename>)`. 
+
+```{r load-additional-libraries, warning = FALSE, message = FALSE}
+# Load additional libraries from CRAN and Bioconductor
+library(DESeq2)
+library(RColorBrewer)
+library(pheatmap)
+library(DEGreport)
+library(ggrepel)
+library(tximport)
+```
+
+
+* __Loading data__
+
+Initially, we will be working with the `quant.sf` Salmon output files (detailed information regarding the file formats and other documentation can be found [here](https://salmon.readthedocs.io/en/latest/file_formats.html).  An example of one of the files is shown below.
+
+```{r salmon-quantsf-example}
+# Print an example of the Salmon quant.sf output file
+read_tsv("./data/Mov10_oe_1.salmon/quant.sf") %>% 
+  head() %>% 
+  kbl(caption = "Example quant.sf Salmon output for one of the MOV10 over-expression replicate RNA-seq libraries") %>% 
+  kable_styling(full_width = FALSE) %>% 
+  kable_classic_2()
+
+```
+
+The `quant.sf` output is a tab-separated quantification file, where each row is a quantification record containing the following fields:
+
+* `Name`: contains the name of the transcript from the database.  For example, in the table above, ENST00000456328 is DEAD/H-box helicase 11 like 1 (more information on this particular transcript found [here](http://m.ensembl.org/Homo_sapiens/Transcript/Summary?db=core;g=ENSG00000223972;r=1:11869-14409;t=ENST00000456328)).
+
+* `Length`: length of the transcript, in nucleotides.
+
+* `EffectiveLength`: the effective length of the transcript, which takes into account the different factors being modeled like GC-content and the distribution of the fragment lengths from the underlying transcript that will influence the probability of sampling fragments from this target transcript.  
+
+* `TPM`: transcripts per million, a relative metric of transcript abundance.
+
+* `NumReads`: Salmon's estimate of the number of reads mapping to the particular transcript.  
+
+In order to get these data in the right format for analysis with DESeq2, we need to convert the normalized TPM counts to non-normalized count estimates.  Additionally, we need to collapse our read counts per transcript to read counts per gene, since there are potentially several target transcripts per gene.  The first thing we need to do is name all of the `quant.sf` files to discriminate between samples in downstream analyses.  We'll first create two variables: one variable defining the paths for all directories containing data (there will be nine- one for each sample); and another vector containing the filenames for all of the `quant.sf` files.  We'll use these vectors to create unique names for each `quant.sf` file.
+
+```{r rename-quant-files}
+# Create a vector of the paths to the sample-specific directories containing data
+samples <- list.files(path = "./data", 
+                      full.names = T, 
+                      pattern = "salmon$") # define the names of the directories as anything that ends with "salmon"
+
+# Check to see that the list of directories is correct
+samples # All of the sample-specific directories are present
+
+# Create a vector of all of the quant.sf file names for each sample-specific directory
+files <- file.path(samples, "quant.sf")
+
+# Check to see that the paths to all of the quant.sf files are correct
+files # All of the quant.sf file paths are correct
+
+# Create unique names for each of the directories 
+names(files) <- str_replace(samples, "./data/", "") %>% 
+  str_replace(".salmon", "")
+
+# The above code assigns names to each of the elements in the files vector
+# First, it takes the sample-specific directory names and removes the "./data/" prefix, then removes the ".salmon" extension to create a unique name that can be referred to easily in downstream analyses
+```
+
+Now, we'll need to import our annotation file that contains the reference information linking the transcript IDs that were used to estimate read counts with Salmon to the genes that the transcripts are derived from.
+
+```{r import-annotation-file}
+# Import the annotation file
+tx2gene <- read_tsv("./metadata/tx2gene_grch28_ens94.txt")
+
+# Take a look at the annotation file
+tx2gene %>%
+  head() %>% 
+  kbl(caption = "Annotation file with reference information linking the transcript ID used in the Salmon index to its gene ID and symbol") %>%
+  kable_styling(full_width = FALSE) %>% 
+  kable_classic_2()
+  
+```
+
+The first column is the transcript ID, the second column is the gene ID, and the third ID is the gene symbol. Now we'll need to run the `tximport()` function, which imports the transcript-level estimates from different programs (e.g., Salmon) and summarizes abundances to the gene level using the provided annotation file.  There are several arguments: `files`, which we'll define using the `files` vector containing all of the directories to the `quant.sf` files (defined above); `type`, to define which program was used to generate the counts; `tx2gene`, which specifies the two-column data frame linking the transcript ID to the gene ID (i.e., the first two columns in the annotation file); and `countsFromAbundance`, which we'll set to `lengtScaledTPM` to we use the counts from the `TPM` field in the `quant.sf` file, because we don't want to use the counts that are correlated with the effective length.
+
+```{r run-tximport}
+# Run tximport for all files
+txi <- tximport(files = files, 
+                type = "salmon", 
+                tx2gene = select(tx2gene, c("tx_id", "ensgene")),
+                countsFromAbundance = "lengthScaledTPM")
+
+```
+
+* __Viewing data__
+
+The resulting `txi` object is a list of various matrices: `abundance`, `counts`, `length`, and `countsFromAbundance` (this is just the character given in the `countsFromAbundance` argument in the function call).    
+
+```{r txi-attributes}
+attributes(txi)
+```
+
+Now we want to look specifically at the `counts` matrix, which we'll round to the nearest whole number and then convert to a data frame.
+
+```{r txi-counts-dataframe}
+# Round the txi counts data and conver the matrix to a data frame
+counts_data <- txi$counts %>% 
+  round() %>% 
+  data.frame()
+
+# Take a look at the data frame
+counts_data %>% 
+  head() %>% 
+  kbl(caption = "Count data for each gene obtained from Salmon pseudocounts") %>% 
+  kable_styling(full_width = FALSE) %>% 
+  kable_classic_2()
+
+# Save this counts table to a file in the data directory
+write_csv(counts_data, 
+          file = "./data/counts_data.csv")
+```
+
+* __Creating metadata__
+
+Now we just want to create a metadata file linking the headers from the `txi$count` matrix to the sample groups (i.e., control, overexpression, and knockdown).  The Salmon data file that was downloaded from the tutorial webpage actually only had two MOV10 knockdown replicates, so we will need to change the metadata data frame accordingly.  
+
+```{r}
+# Create a metadata table
+counts_metadata <- data.frame(sample_type = c(rep("control", 3), 
+                           rep("MOV10_knockdown", 2), 
+                           rep("MOV10_overexpression", 3)), 
+           sample_name = colnames(txi$counts))
+
+# View the metadata
+counts_metadata %>% 
+  kbl(caption = "Metadata linking the sample type to the sample name in the gene counts table") %>% 
+  kable_styling(full_width = FALSE) %>% 
+  kable_classic_2()
+
+# Write this data frame to a file in the metadata directory
+write_csv(counts_metadata, 
+          file = "./metadata/counts_metadata.csv")
+```
 
 ## Part II: QC and setting up for DESeq2
 

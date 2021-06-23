@@ -1,0 +1,9 @@
+sample_type,sample_name
+control,Irrel_kd_1
+control,Irrel_kd_2
+control,Irrel_kd_3
+MOV10_knockdown,Mov10_kd_2
+MOV10_knockdown,Mov10_kd_3
+MOV10_overexpression,Mov10_oe_1
+MOV10_overexpression,Mov10_oe_2
+MOV10_overexpression,Mov10_oe_3
