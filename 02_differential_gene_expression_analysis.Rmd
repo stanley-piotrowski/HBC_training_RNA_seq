@@ -13,6 +13,22 @@ library(tidyverse)
 library(readxl)
 library(janitor)
 library(kableExtra)
+library(DESeq2)
+library(RColorBrewer)
+library(pheatmap)
+library(DEGreport)
+library(ggrepel)
+library(tximport)
+library(ggtext)
+
+# Set ggplot theme
+my_theme <- theme(
+  panel.background = element_rect(color = "black", fill = "white"), 
+  panel.grid = element_blank(),
+  plot.title = element_markdown(),
+  plot.subtitle = element_markdown(),
+  plot.caption = element_markdown()
+)
 ```
 
 
@@ -24,7 +40,7 @@ The basic overview of an RNA-seq experiment involves sample and library preparat
 
 Some notes on each of these processes are highlighted below:
 
-* __Sample and library preparation__
+#### Sample and library preparation
 
   * The first step in sample and library preparation is RNA extraction, which is generally achieved by isolating total RNA from a sample and treating with DNAse to digest any genomic DNA.
   * From here, many protocols utilize a messenger RNA (mRNA) enrichment step, or a ribosomal RNA (rRNA) depletion step, as rRNA is much more abundant in many cell types and can dominate reads from RNA-seq experiments.
@@ -47,7 +63,7 @@ alt="RNA-seq sample and library preparation workflow.">
 </p>
 <br>
 
-* __Sequencing__
+#### Sequencing
 
   * Illumina uses a sequencing-by-synthesis technology to generate sequencing data for each molecule.
   * To start, the cDNA libraries are denatured with sodium hydroxide (NaOH) and hybridized to the complimentary oligos on the surface of the flow cell.
@@ -65,7 +81,7 @@ alt="Overview of Illumina sequencing-by-synthesis process.">
 </p>
 <br>
   
-* __Quality control of raw sequencing data (FastQC)__
+#### Quality control of raw sequencing data (FastQC)
 
   * During each sequencing cycle, Illumina generates a BCL basecall file, which is then converted to a FASTQ file for subsequent analysis.
   * The FASTQ file contains information about the sequencer and the flow cell (e.g., flow cell ID, X and Y coordinates of the sample, etc.), the read sequence, a "+" sign, and quality information denoting the probability of an incorrect base call at a given position. 
@@ -79,7 +95,7 @@ alt="Overview of Illumina sequencing-by-synthesis process.">
 
   * FastQC is a tool for evaluating the quality of sequencing data, giving the user basic statistics such as the distribution of quality scores across the length of the reds, per base N content (i.e., no call), and the number and identity of overrepresented sequences that could be caused by contamination from the library preparation process (e.g., adapter dimer contamination).
 
-* __Quantify expression__
+#### Quantify expression
 
   * After evaluating the quality of sequence data and identifying any potential issues that could cause problems downstream, the next step is to quantify the expression of each transcript.
   * In other words, the goal is to identify which genes (or targets, more generally), each read is derived from.
@@ -89,7 +105,7 @@ alt="Overview of Illumina sequencing-by-synthesis process.">
   * [Sailfish](http://www.cs.cmu.edu/~ckingsf/software/sailfish/) uses a similar approach, instead using k-mers and a set of reference sequences (e.g., a reference transcriptome) to generate abundance estimates without aligning to a reference genome.
   * [Kallisto](https://pachterlab.github.io/kallisto/about) uses an approach called pseudoalignment, in which only the transcripts from which RNA-seq reads would have originated from are considered, without regard for how the reads and reference transcriptome align to generate abundance estimates.
 
-* __Quality control of aligned sequence reads (STAR/Qualimap)__
+####Quality control of aligned sequence reads (STAR/Qualimap)
 
   * Although for this tutorial we'll be using the abundance estimates generated from Salmon, it is still important to evaluate how well the RNA-seq reads map to a reference genome.
   * This can be accomplished using splice-aware aligners like STAR or HiSAT2, both of which can generate binary alignment map (BAM) files.
@@ -103,7 +119,7 @@ alt="Overview of Illumina sequencing-by-synthesis process.">
 </p>
 <br>
 
-* __Quality control: aggregating results with MultiQC__
+#### Quality control: aggregating results with MultiQC 
 
   * [MultiQC](https://multiqc.info/) is a program that can be used to aggregate the results from various bioinformatics QC analyses (e.g., FastQC, Qualimap, alignment log files, etc.) for each sample into a single HTML report.
   * Briefly, the user will run MultiQC in an analysis directory containing all of the QC and log files and generate a single HTML report with all samples aggregated together to identify any patterns or outliers that may warrant investgiation before proceeding with subsequent analyses.
@@ -121,7 +137,7 @@ This section highlights factors to consider when designing RNA-seq experiments, 
 
 Some notes for each section are presented below:
 
-* __Replicates__
+#### Replicates
 
   * Technical replicates are replicate samples obtained from the same specimen to measure technical variation associated with a particular process (e.g., taking three DNA samples from the same mouse to measure technical variation in an assay).
   
@@ -135,11 +151,11 @@ Some notes for each section are presented below:
   
   * Coverage, a term used to describe how many times (on average) each position in a genome has been sequenced, is not used in RNA-seq experiments because gene expression is highly variable.  
   
-* __Confounding__
+#### Confounding
 
   * Confounding refers to situations in which a researcher cannot distinguish between biological variation and technical variation (e.g., all male mice were used in a control group and all female mice were used in an experimental group).
   
-* __Batch effects__ 
+#### Batch effects 
 
   * Batch effects refer to situations where you have additional confounding variables related to components of the workflow- for example, sequencing all samples from a particular species on one flow cell, and all samples from another species on a different flow cell, when trying to compare transcriptional activity at the same genes across species.
   
@@ -161,7 +177,7 @@ alt="PCA and heatmap of comparative gene expression data between mouse and human
   
   * Additionally, it is recommended to include the batch ID (e.g., a numeric value) in experimental metadata so that during normal QC steps, if potential batch effects are identified, they can be accounted for with linear regression or similar techniques.  
   
-* __Exercise__ 
+#### Exercise
 
 1) Fill in a group value in the `rna_isolation` field in the Excel file from the training GitHub page (linked [here](https://hbctraining.github.io/DGE_workshop_salmon_online/lessons/experimental_planning_considerations.html)).  The idea is to: a) randomly allocate group treatment for RNA isolation; and b) give equal numbers of RNA isolations for each researcher.  For both of these tasks, we'll create a vector of possible assignments (e.g., `group1` through `group6`), repeat twice (there are 12 total samples), and then use `sample()` to create a vector of randomly drawn group assignments that we can use in the `rna_isolation` field, for example.
 
@@ -205,11 +221,11 @@ This section describes the basic workflow of an RNA-seq experiment, the objectiv
 
 Notes for each section are presented below:
 
-* __Different gene expression analysis__
+#### Different gene expression analysis
 
   * The basic workflow in this notebook is to take the pseudocounts generated from the different lightweight alignment programs (e.g., Salmon) and convert them to counts of genes, perform QC on these data through normalization and unsupervised clustering to detect potential batch effects (e.g., principal components analysis; PCA), and then perform the differential expression analyses.  
   
-* __Review of the dataset__
+#### Review of the dataset
 
   * The dataset that will be used in this tutorial is from Kenny et al. 2014 (found [here](https://pubmed.ncbi.nlm.nih.gov/25464849/)) in which the authors compare the expression of MOV10 in three different groups: MOV10 over-expression, in which HEK293F (human epithelial kidney cells) were transfected with a MOV10 transgene; MOV10 knockdown, in which a short interfering RNA (siRNA) was used to knock out MOV10 expression; and in which siRNA created a MOV10 knockdown via non-specific knock out.  
   
@@ -223,7 +239,7 @@ Notes for each section are presented below:
   
   * The data for the analysis were downloaded from the Sequence Read Archive (SRA) and processed using the steps defined in the above sections.
   
-* __Setting up__
+#### Setting up
 
 To set up for the differential expression analyses, we need to download the Salmon results from the full dataset from [this](https://hbctraining.github.io/DGE_workshop_salmon_online/lessons/01b_DGE_setup_and_overview.html) page by right-clicking and saving the zipped directory directly into the project directory.  We can then unzip the directory, which will create a new `data` directory with subdirectories for each sample.  Next, we'll need to download the annotation file to map the transcripts to the genes.  We can download this text file from of the HBC's GitHub repositories [here](https://github.com/hbctraining/DGE_workshop_salmon/blob/master/data/tx2gene_grch38_ens94.txt).
 
@@ -240,20 +256,9 @@ download.file("https://raw.githubusercontent.com/hbctraining/DGE_workshop_salmon
               destfile = "./metadata/tx2gene_grch28_ens94.txt")
 ```
 
-Now that we've downloaded all of the Salmon output files and the annotation file, we need to load the libraries from CRAN and Bioconductor.  Note, any Bioconductor packages need to be installed using the command `Biocmanager::install(<packagename>)`. 
+Now that we've downloaded all of the Salmon output files and the annotation file, we need to load the libraries from CRAN and Bioconductor (see setup code chunk at the beginning of this document).  Note, any Bioconductor packages need to be installed using the command `Biocmanager::install(<packagename>)`. 
 
-```{r load-additional-libraries, warning = FALSE, message = FALSE}
-# Load additional libraries from CRAN and Bioconductor
-library(DESeq2)
-library(RColorBrewer)
-library(pheatmap)
-library(DEGreport)
-library(ggrepel)
-library(tximport)
-```
-
-
-* __Loading data__
+#### Loading data
 
 Initially, we will be working with the `quant.sf` Salmon output files (detailed information regarding the file formats and other documentation can be found [here](https://salmon.readthedocs.io/en/latest/file_formats.html).  An example of one of the files is shown below.
 
@@ -330,7 +335,7 @@ txi <- tximport(files = files,
 
 ```
 
-* __Viewing data__
+#### Viewing data
 
 The resulting `txi` object is a list of various matrices: `abundance`, `counts`, `length`, and `countsFromAbundance` (this is just the character given in the `countsFromAbundance` argument in the function call).    
 
@@ -344,7 +349,8 @@ Now we want to look specifically at the `counts` matrix, which we'll round to th
 # Round the txi counts data and conver the matrix to a data frame
 counts_data <- txi$counts %>% 
   round() %>% 
-  data.frame()
+  data.frame() %>% 
+  rownames_to_column("Gene")
 
 # Take a look at the data frame
 counts_data %>% 
@@ -358,7 +364,7 @@ write_csv(counts_data,
           file = "./data/counts_data.csv")
 ```
 
-* __Creating metadata__
+#### Creating metadata
 
 Now we just want to create a metadata file linking the headers from the `txi$count` matrix to the sample groups (i.e., control, overexpression, and knockdown).  The Salmon data file that was downloaded from the tutorial webpage actually only had two MOV10 knockdown replicates, so we will need to change the metadata data frame accordingly.  
 
@@ -383,6 +389,105 @@ write_csv(counts_metadata,
 ## Part II: QC and setting up for DESeq2
 
 ### 1. RNA-seq counts distribution
+
+#### Explore RNA-seq count data
+
+ Below is the counts data frame with the genes in the first column and the samples in the following columns.  Each cell contains an integer which represents the number of transcripts from a particular gene in that sample.
+ 
+```{r visualize-count-data}
+counts_data %>% 
+  head() %>% 
+  kbl(caption = "Count data for each gene obtained from Salmon pseudocounts") %>% 
+  kable_styling(full_width = FALSE) %>% 
+  kable_classic_2()
+```
+ 
+We can plot the distribution of counts for each sample using a histogram, which will demonstrate the common features of RNA-seq data: there are generally low counts for a large proportion of the genes, and a large tail in the distribution as there is no upper limit to gene expression.
+
+```{r counts-histogram}
+# Generate a histogram for each sample
+counts_data %>% 
+  pivot_longer(cols = !Gene, 
+               names_to = "Sample", 
+               values_to = "Count") %>% 
+  ggplot(aes(Count)) +
+  geom_histogram(stat = "bin", 
+                 bins = 200) +
+  facet_wrap(~ Sample) +
+  my_theme
+
+```
+
+#### Modeling count data
+
+* Count data can be modeled either with the binomial distribution (e.g., modeling the number of times you would expect to see heads in a series of coin tosses) or the Poisson distribution.  The latter if often used when the number of trials is very large, but assumes that the mean and the variance are equal.  
+
+* To evaluate whether we meet this assumption, we'll use the three MOV10 over-expression replicates and generate vectors for the mean counts for each gene and the variance.  
+
+* Then, we can visualize the relationship between the mean and variance in a scatterplot.
+
+```{r mean-variance-mov10-overexpression, warning = FALSE, message = FALSE}
+# Calculate mean and variance for each gene in the three Mov10 overexpression samples
+counts_data_stats <- counts_data %>% 
+  select(Gene, contains("Mov10_oe")) %>% 
+  mutate(Mean_count = apply(select(., contains("Mov10_oe")), 1, mean), 
+         Variance = apply(select(., contains("Mov10_oe")), 1, var))
+
+# Plot the mean and variance and add a continuous slope line where mean = variance
+counts_data_stats %>% 
+  ggplot(aes(Mean_count, Variance)) +
+  geom_point(alpha = 0.5) +
+  scale_x_log10(limits = c(1, 1e9)) +
+  scale_y_log10(limits = c(1, 1e9)) +
+  geom_abline(intercept = 0, 
+              slope = 1, 
+              linetype = "dashed", 
+              color = "red") +
+  my_theme +
+  labs(x = "Mean counts", 
+       y = "Variance counts", 
+       title = "Mean versus variance in RNA-seq count data in MOV10 over-expression samples")
+```
+
+* This plot reveals that the mean and variance are not equal- if they were, the points would be right along the dashed red line.
+
+* Instead, we can see that for genes with higher mean counts, the variance is higher than the mean (i.e., the points are above the dashed line).
+
+* The genes with lower mean counts also display heteroscedasticity, or the tendency for low mean counts to have high variability in the variance estimates.
+
+#### An alternative: the negative binomial distribution
+
+* [This blogpost](http://bridgeslab.sph.umich.edu/posts/why-do-we-use-the-negative-binomial-distribution-for-rnaseq) provides a brief explanation for using the negative binomial distribution to model count data in RNA-seq data sets.
+
+* In summary, RNA-seq data cannot be normally distributed, because we cannot have negative counts, or fractions of counts; all of the counts must be positive whole numbers (i.e., positive integers).  
+
+* Because the Poisson distribution assumes the mean and variance are equal, this is not appropriate for RNA-seq data sets where the number of replicates is relatively small and thus, we cannot accurately estimate variance.
+
+* The negative binomial distribution is an appropriate alternative, as this probability distribution doesn't assume equal mean and variance for count data. 
+
+* However, if we had enough replicates (which is often unfeasible for RNA-seq experiments), we may be able to use the Poisson if the variance is reduced such that the assumption of equal mean and variance is satisfied.
+
+#### Exercise
+
+1) If we observed little to no variability between samples, this might suggest that we can model the RNA-seq count data with the Poisson distribution where mean and variance are equal.  
+
+2) We would expect the mean and variance to be equal for this dataset.  
+
+#### Replicates and variability
+
+* Recall, biological replicates come from the same biological condition but different sources (e.g., DNA samples taken from mice raised in the same experimental conditions).
+
+* One of the challenges in differential gene expression analysis is identifying and correcting for unknown sources of biological (e.g., mice with different genetic backgrounds) or technical variation (e.g., different lot numbers of reagents, etc.).
+
+* HBC recommends running running experiments in triplicate (e.g., three replicates for a experimental group and three replicates for a control group).
+
+* However, more replicates are generally always better because we can get more precise estimates of the mean and variance, and thus, better detect meaningful differences between groups.
+
+* The authors also include a figure from a study showing the increase in the number of differentially expressed genes as a function of the number of replicates included in a study, more so than the sequencing depth.  
+
+#### Differential Expression with DESeq2
+
+* We will be using the DESeq2 package for differential gene expression analysis, which employs the negative binomial distribution to model counts from RNA-seq data.
 
 ### 2. Count normalization
 
