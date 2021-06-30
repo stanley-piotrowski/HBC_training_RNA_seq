@@ -491,6 +491,14 @@ counts_data_stats %>%
 
 ### 2. Count normalization
 
+#### Normalization
+
+#### Count normalization of Mov10 dataset using DESeq2
+
+
+
+
+
 ### 3. Sample-level QC
 
 ### 4. Design formulas
