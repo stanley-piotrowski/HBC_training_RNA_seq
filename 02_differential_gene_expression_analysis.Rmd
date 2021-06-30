@@ -639,6 +639,34 @@ kable(list(t1 %>% select(., Gene, contains("Mov10_oe")),
 
 ### 3. Sample-level QC
 
+#### Sample-level QC
+
+* The basics of QC for RNA-seq data is to evaluate our data at the sample level and at the gene level.
+
+* For example, one of the questions we want to know is how samples cluster together or appear more similar, and if this matches what we would expect based on our background knowledge.
+
+* For sample-level QC, we really want to know how similar the replicates are to each other, mostly to confirm that the experimental condition (e.g., treatment) is the major source of variation in the data, not sample-to-sample variability.
+
+* Instead of just using the normalized counts, we'll use the regularized log-transformed normalized counts, which helps to avoid the high variability in variance estimates in genes with low counts (see above sections) by shrinking those low read counts toward the per-gene average across all samples.
+
+* The genes with high counts will have transformed values similar to those obtained using the log2 transformation.
+
+#### Principal components analysis (PCA)
+
+* PCA is an powerful tool for dimensionality reduction and in this context, if replicates have similar expression profiles across genes, they will cluster together in PCA space relative to samples from a different treatment condition with different expression profiles.
+
+* In some cases, as in the example in the tutorial, the treatment is not the only source of variation in the data- in fact, other factors like sex may contribute a larger amount to the overall variability in the data instead of the treatment. 
+
+* However, in some cases, it may be possible to account for these factors in the modeling step such we can still parse out the differentially expressed genes associated with the treatment. 
+
+#### Hierarchical clustering heatmap
+
+* The heatmap shows the correlation of gene expression for all pairwise combinations of samples in the data and the different axes display substructure in the data.
+
+* In the example in the tutorial, we would expect that the sample replicates would have a high correlation in their gene expression profiles, and would thus cluster together in the heatmap.
+
+#### MOV10 quality assessment and exploratory analysis using DESeq2
+
 ### 4. Design formulas
 
 ### 5. Hypothesis testing and multiple test correction
