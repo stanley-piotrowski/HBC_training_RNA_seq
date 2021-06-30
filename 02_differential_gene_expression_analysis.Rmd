@@ -493,11 +493,149 @@ counts_data_stats %>%
 
 #### Normalization
 
+* Normalization involves adjusting the counts for each gene and sample to account for the variability associated with factors that aren't related to the experimental differences between groups, for example.
+
+* There are several factors which need to be considered during the normalization step:
+
+  * __Sequencing depth:__ we need to account for differences in the number of reads which map to each gene (sequencing depth), as we may observe differences in counts that are simply due to differences in sequencing depth.
+  
+  * __Gene length:__ we also need account for differences in counts between different genes in the same sample, because one gene may be longer than the other, and longer genes have a biased increase in the number of reads which map to them relative to shorter genes.
+  
+  * __RNA composition:__ some genes may have large differences in counts between two samples, and because of that, may dominate the differential expression signal and drown out lower expressed genes that are differentially expressed if they are not normalized to adjust for these large differences. 
+  
+#### Normalization methods
+
+* There are different normalization methods used, most of which account for either sequencing depth or a combination of sequencing depth and gene length, but are not suitable for evaluating between-sample comparisons or differential gene expression analyses (e.g., transcripts per million).
+
+* The reason we can't use some normalization methods like reads per kilobase per million mapped reads (RPKM) is because the RPKM-normalized counts between samples could be different, which doesn't allow us to evaluate differences in gene expression.
+
+#### DESeq2-normalized counts: median of ratios method
+
+* Differences in sequencing depth (differences in the number of reads mapped to the same gene in two different samples) and the RNA composition need to be accounted for in the normalization method.
+
+* DESeq2 uses the median of ratios method to normalize counts, which involves several steps:
+
+1) Create a pseudo-reference sample by calculating the row-wise geometric mean.
+  * The geometric mean is calculated by taking the square root of the product of counts row-wise, and is used in situations when two counts may be very different and is less sensitive to influence from the larger number.
+  
+2) Calculate the ratio of the count for each sample to the pseudo-reference sample.
+
+3) Calculate the normalization factor for each sample by taking the median of all of the ratios for each sample to the pseudo-reference across all genes.  
+
+  * The key concept behind this approach is that it assumes that not all of the genes are differentially expressed, so it successfully accounts for the sequencing depth and RNA composition because it is not sensitive to larger outlier genes.  
+  
+4) Calculate the normalized counts for each gene in each sample by dividing the raw counts by the per-sample normalization factor.  
+
+* Note, the normalized counts will not necessasrily be whole numbers.  
+
 #### Count normalization of Mov10 dataset using DESeq2
 
+* First, we need to make sure that the counts data and the metadata have matching information.
 
+```{r match-metadata-counts-data}
+# Match the metadata and counts data files
+all(colnames(txi$counts) %in% counts_metadata$sample_name) # TRUE
+all(colnames(txi$counts) == counts_metadata$sample_name) # TRUE
+```
 
+#### Exercises
 
+* If the sample names in the counts matrix and the metadata file are the same, but they are in a different order, how can we re-order them to satisfy this requirement?
+
+```{r reordering-names}
+# Test vectors
+a <- c("apple", "banana", "orange")
+b <- c("banana", "apple", "orange")
+
+# Test conditions
+all(a %in% b) # TRUE
+all(a == b) # FALSE- because they are in a different order
+
+# Try rearranging with match using bracket subsetting
+c <- a[match(a, b)]
+
+# Test again
+all(c %in% b) # TRUE
+all(c == b) # TRUE
+
+# Reverse the sample name order
+counts_metadata_testing <- counts_metadata %>% 
+  arrange(desc(sample_name))
+
+# Test again with the counts matrix
+all(colnames(txi$counts) %in% counts_metadata_testing$sample_name) # TRUE
+all(colnames(txi$counts) == counts_metadata_testing$sample_name) # FALSE
+
+# Apply the line of code to fix the names
+new_arrangement <- counts_metadata_testing$sample_name[match(counts_metadata_testing$sample_name, colnames(txi$counts))]
+
+# Re-arrange the counts_metadata_testing data frame with the new arragement
+counts_metadata_testing <- counts_metadata_testing %>% 
+  arrange(match(.$sample_name, new_arrangement))
+
+# Test one last time 
+all(colnames(txi$counts) %in% counts_metadata_testing$sample_name) # TRUE
+all(colnames(txi$counts) == counts_metadata_testing$sample_name) # TRUE
+```
+
+* To create a DESeq2 object, we need both the count matrix and metadata (which is why they need to be in the same order) as well as a design formula, which controls how the package evaluates gene expression across different groups (e.g., control, knockdown, and over-expression).
+
+```{r create-DESeq2-object}
+# Convert the characters in the metadata to factors
+counts_metadata <- counts_metadata %>% 
+  mutate(across(where(is.character), as.factor))
+
+# Create the DESeq2 object by specifying the metadata as the colData and the sample type as the design
+dds <- DESeqDataSetFromTximport(txi, colData = counts_metadata, design = ~sample_type)
+
+```
+
+* The next step is to perform the median of ratios normalization step using the `estimateSizeFactors()` function.
+
+```{r normalize-counts}
+# Normalize counts using median of ratios method
+dds <- estimateSizeFactors(dds)
+
+# View the sample-specific normalization factors using the sizeFactors() function
+data.frame(norm_factor = sizeFactors(dds)) %>% 
+  rownames_to_column("sample") %>% 
+  kbl(caption = "Per-sample median of ratios normalization factors calculated with DESeq2") %>% 
+  kable_styling(bootstrap_options = "striped", 
+                full_width = FALSE) %>% 
+  kable_classic_2()
+```
+* Now to obtain the normalized size factors, we use the `counts()` function with the argument `normalized = TRUE`.  
+
+```{r extract-normalized-counts}
+# Extract the normalized counts from the DESeq2 data set
+normalized_counts <- counts(dds, normalized = TRUE)
+
+# Save this as a text file for later 
+normalized_counts %>% 
+  data.frame() %>% 
+  rownames_to_column("Gene") %>% 
+  write_csv(., "./data/normalized_counts.csv")
+
+# View the first few normalized counts to see how they've changed from the original counts
+t1 <- counts(dds) %>% 
+  head() %>% 
+  data.frame() %>% 
+  rownames_to_column("Gene")
+
+t2 <- normalized_counts %>% 
+  head() %>% 
+  data.frame() %>% 
+  rownames_to_column("Gene") %>% 
+  mutate(across(where(is.numeric), ~round(.x, digits = 2)))
+
+kable(list(t1 %>% select(., Gene, contains("Mov10_oe")), 
+           t2 %>% select(., Gene, contains("Mov10_oe"))), 
+      caption = "Raw (left) versus normalized (right, rounded to two digits) gene counts from DESeq2", 
+      booktabs = TRUE) %>% 
+  kable_styling(full_width = FALSE, 
+                bootstrap_options = "striped") %>% 
+  kable_classic_2()
+```
 
 ### 3. Sample-level QC
 
