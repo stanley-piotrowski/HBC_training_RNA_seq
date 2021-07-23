@@ -667,6 +667,85 @@ kable(list(t1 %>% select(., Gene, contains("Mov10_oe")),
 
 #### MOV10 quality assessment and exploratory analysis using DESeq2
 
+* The first step to quality assessment with PCA and hierarchical clustering is to transform the normalized counts using the regularized-log2 transformation to account for the heteroskedastic nature of the data (i.e., variance in the response is not equal across the range of the predictor values) and normalize by library size.
+
+```{r rlog-transformation}
+# Transform the normalized counts using rlog2 transformation
+# Importantly, we need to use the `blind=TRUE` argument so the transformation is done without taking into account the sample groups
+rld <- rlog(dds, blind = TRUE)
+
+```
+
+#### PCA for the MOV10 dataset
+
+* The `DESeq2::plotPCA()` function plots the PCA using `ggplot2` under the hood and takes the `rlog()` transformed object directly as input.
+
+```{r mov10-pca}
+# Generate a PCA plot for the MOV10 data
+plotPCA(rld, intgroup = "sample_type") +
+  labs(title = "QC of MOV10 gene expression data", 
+       subtitle = "Normalized gene counts were transformed using the regularized log2 transformation") +
+  my_theme
+```
+
+#### Exercise 
+
+1) _What does the above plot tell you about the similarity of samples?_
+
+The plot indicates that each biological replicate is more similar to one another than to other biological replicates.  
+
+2) _Does it fit the expectation from the experimental design?_
+
+The experimental design includes three biological replicates for each group (except for one group): three control replicates, two MOV10 knockdown replicates, and three MOV10 over-expression replicates.  From this design, we could expect all of the controls to group together, all of the knockdowns to group together, and all of the over-expression replicates to group together.  Indeed, this is exactly what we see.  
+
+3) _What do you think the % variance information (in the axes titles) tell you about the data in the context of the PCA?_
+
+The `% variance` on each axis describes the variation in the gene count data explained on each principal component axis.  The strategy behind PCA is to reduce dimensionality and explain the total variation in the data set with as few variables as possible.  In the context of the experiment, the first principal component separates the MOV10 treatments: the knockdowns and the over-expression replicates.  The second principal component separates the MOV10 treatments from the control treatmet with normal MOV10 expression.
+
+#### Additional PCA QC
+
+* While the `plotPCA()` function is a powerful tool to quickly perform quality control on RNA-seq data, it has two caveats: it will only plot the top 500 most variable genes (which likely explains more than enough variation anyway), and it will only plot the first two principal components.  For additional functionality to plot different principal components, we can use the `prcomp()` function.  This will also allow us to extract useful information like the loadings (stored in the `rotation` slot), or the "weight" of different genes in explaining variation along a PCA axis.  
+
+* Importantly, the matrix gives the observations as columns and the features (i.e., genes) as rows, but we need this to be flipped so the observations are in rows and the variables in columns.  See this stacks exchange [post](https://stats.stackexchange.com/questions/248825/why-do-we-need-to-take-the-transpose-of-the-data-for-pca) for more details.
+
+```{r mov10-pca-custom}
+# Extract the regularized log-transformed counts into a matrix
+rld_pca <- assay(rld) %>% 
+  t() %>% 
+  prcomp()
+
+# Extract summary information
+summary_df <- summary(rld_pca) %>% 
+  pluck("importance") %>% 
+  data.frame() %>% 
+  rownames_to_column("Term") %>% 
+  filter(Term == "Proportion of Variance") %>% 
+  mutate(across(where(is.numeric), function(x) round(x * 100, digits = 2)))
+  
+# Import metadata
+metadata <- read_csv("./metadata/counts_metadata.csv")
+
+# Extract coordinates from PCA into a data frame and bind with metadata
+pca_df <- cbind(metadata, rld_pca$x)
+
+# Create plotting function
+plot_pca <- function(df, axis1, axis2) {
+  df %>% 
+    ggplot(aes_string(paste("PC", axis1, sep = ""), 
+               paste("PC", axis2, sep = ""))) + 
+    geom_point(aes(color = sample_type), 
+               size = 3) +
+    labs(x = paste("PC", axis1, ": ", eval(summary_df %>% dplyr::select(paste("PC", axis1, sep = ""))), "%", sep = ""), 
+         y = paste("PC", axis2, ": ", eval(summary_df %>% dplyr::select(paste("PC", axis2, sep = ""))), "%", sep = "")) +
+    my_theme
+}
+
+plot_pca(pca_df, 1, 2)
+```
+
+
+
+
 ### 4. Design formulas
 
 ### 5. Hypothesis testing and multiple test correction
