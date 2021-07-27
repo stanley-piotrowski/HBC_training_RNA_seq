@@ -777,11 +777,58 @@ pheatmap(assay_mat, annotation = metadata)
 
 ### 4. Design formulas
 
-### 5. Hypothesis testing and multiple test correction
+* DESeq2 models counts of genes using the negative binomial distribution and generalized linear models (GMLs).  
+
+* It's important to note that there are two types of distributions for modeling count data: the Poisson distribution, and the negative binomial distribution.  The former assumes the variance and mean are equal, and is thus only controlled by a single parameter, lambda; the latter does not make this assumption, and is more flexible for dealing with gene count data.  
+* This is critical, because often, the number of technical replicates is quite low for RNA-seq experiments, making it challenging to accurately estimate variance.  
+
+* At a high-level overview, however, what we're aiming to do with DESeq2 is statistically evaluate if the mean expression of different genes across sample groups is different.  The `DESeq()` function estimates the size factors and dispersion of each gene (the dispersion is a metric of the spread of the data distribution), and fits a negative binomial generalized linear model.  The Wald test is conducted to test for statistical significance of each gene.
+
+* The design formula allows us to define which sources of variation we want to control for in the model that could be confounding factors (e.g., sex, or age), and which is the factor of interest (e.g., treatment).
+
+* In the design formula, all factors that we want to account for in the metadata should be included if they are major sources of variation, and the last factor will be the condition of interest.  
+
+#### Exercises
+
+1) _Suppose you wanted to study the expression differences between the two age groups in the metadata shown in the tutorial, and major sources of varition were `sex` and `treatment`, how would the design formula be written?_
+
+* The design formula would be written as: `design <- ~ sex + treatment`.
+
+2) _Based on our Mov10 metadata data frame, which factors should we include in our design formula?_
+
+* Based on the previously conducted QC PCA and hierarchical clustering analyses, there are no additional terms in the metadata data frame that we should include in the design formula other than `sample_type`.  
+
+* Thus, our design formula would written as: `design <- ~ sample_type`.
+
+3) _What would you do if you wanted to include a factor in your design formula that is not in your metadata?_
+
+* If you wanted to do this, you would need to create a new column in your metadata data frame and ensure that it matches the factor in the design formula.  
+
+#### MOV10 DE Analysis
+
+* To run the DESeq analysis, we just need to create a new `DEseq2Dataset` object with the raw counts, and then run the `DESeq()` function.
+
+```{r DESeq}
+# Create a new DESeq2Dataset object
+dds <- DESeqDataSetFromTximport(txi, colData = metadata, design = ~ sample_type)
+
+# Run the analysis
+dds <- DESeq(dds)
+```
+
+#### Exercise
+
+Below are the various design formulas that would be used to test for different effects while controlling for various factors.
+
+* Test the effect of `treatment`: `design <- ~ treatment`.
+
+* Test for the effect of genotype, while regressing out the variation due to `treatment`: `design <- ~ treatment + genotype.`
+
+* Test for the effect of `genotype` on the `treatment` effects: `design <- ~ genotype + treatment + genotype:treatment`.  
+
+### 5. Hypothesis testing and multiple testing correction
 
 ## Part III: DESeq2
-
-### 1. Description of steps for DESeq2
 
 ### 2. Wald test results
 
