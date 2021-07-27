@@ -20,6 +20,7 @@ library(DEGreport)
 library(ggrepel)
 library(tximport)
 library(ggtext)
+library(patchwork)
 
 # Set ggplot theme
 my_theme <- theme(
@@ -324,7 +325,7 @@ tx2gene %>%
   
 ```
 
-The first column is the transcript ID, the second column is the gene ID, and the third ID is the gene symbol. Now we'll need to run the `tximport()` function, which imports the transcript-level estimates from different programs (e.g., Salmon) and summarizes abundances to the gene level using the provided annotation file.  There are several arguments: `files`, which we'll define using the `files` vector containing all of the directories to the `quant.sf` files (defined above); `type`, to define which program was used to generate the counts; `tx2gene`, which specifies the two-column data frame linking the transcript ID to the gene ID (i.e., the first two columns in the annotation file); and `countsFromAbundance`, which we'll set to `lengtScaledTPM` to we use the counts from the `TPM` field in the `quant.sf` file, because we don't want to use the counts that are correlated with the effective length.
+The first column is the transcript ID, the second column is the gene ID, and the third ID is the gene symbol. Now we'll need to run the `tximport()` function, which imports the transcript-level estimates from different programs (e.g., Salmon) and summarizes abundances to the gene level using the provided annotation file.  There are several arguments: `files`, which we'll define using the `files` vector containing all of the directories to the `quant.sf` files (defined above); `type`, to define which program was used to generate the counts; `tx2gene`, which specifies the two-column data frame linking the transcript ID to the gene ID (i.e., the first two columns in the annotation file); and `countsFromAbundance`, which we'll set to `lengthScaledTPM` to we use the counts from the `TPM` field in the `quant.sf` file, because we don't want to use the counts that are correlated with the effective length.
 
 ```{r run-tximport}
 # Run tximport for all files
@@ -737,14 +738,42 @@ plot_pca <- function(df, axis1, axis2) {
                size = 3) +
     labs(x = paste("PC", axis1, ": ", eval(summary_df %>% dplyr::select(paste("PC", axis1, sep = ""))), "%", sep = ""), 
          y = paste("PC", axis2, ": ", eval(summary_df %>% dplyr::select(paste("PC", axis2, sep = ""))), "%", sep = "")) +
-    my_theme
+    my_theme +
+    theme(
+      axis.title.x = element_text(face = "bold"), 
+      axis.title.y = element_text(face = "bold")
+    )
 }
 
-plot_pca(pca_df, 1, 2)
+plot_pca(pca_df, 1, 2) + 
+  plot_pca(pca_df, 1, 3) + 
+  plot_pca(pca_df, 2, 3) +
+  plot_layout(guides = "collect") +
+  plot_annotation(tag_levels = "A", tag_suffix = ")") &
+  theme(legend.position = "bottom")
 ```
 
+* We can see additional patterns arise when we plot different PC axes.  Notably, when we plot PC1 and PC3, the MOV10 knockdown and control samples cluster together.  Interestingly, there is some odd behavior with one of the MOV10 over-expression samples on PC3 that may need to be investigated further.
 
+#### Hierarchical Clustering for the MOV10 dataset
 
+* To construct a heatmap, we need to use the `SummarizedExperiment::assay()` function to extract a matrix from the `DESeq2` object, then calculate the correlation using the `cor()` base R function to calculate all of the pairwise correlations for all samples.  We'll use the `metadata` table to annotate the heatmap.
+
+```{r mov10-heatmap}
+# Extract the matrix from the DESeq2 object
+assay_mat <- assay(rld) %>% 
+  cor()
+
+# Create new metadata object
+metadata <- data.frame(sample_type = rep(c("control", "knockdown", "overexpression"), 
+                                    c(3, 2, 3)))
+row.names(metadata) <- colnames(assay_mat)
+
+# Plot the heatmap
+pheatmap(assay_mat, annotation = metadata)
+```
+
+* Overall, we see high correlations between samples of the same type, indicating that this dataset won't likely lead to any issues when identifying differentially expressed genes.  
 
 ### 4. Design formulas
 
