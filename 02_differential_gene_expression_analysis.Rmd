@@ -363,6 +363,9 @@ counts_data %>%
 # Save this counts table to a file in the data directory
 write_csv(counts_data, 
           file = "./data/counts_data.csv")
+
+# Re-impot file for later analysis
+counts_data <- read_csv("./data/counts_data.csv")
 ```
 
 #### Creating metadata
@@ -385,6 +388,9 @@ counts_metadata %>%
 # Write this data frame to a file in the metadata directory
 write_csv(counts_metadata, 
           file = "./metadata/counts_metadata.csv")
+
+# Read in csv for later analysis
+counts_metadata <- read_csv("./metadata/counts_metadata.csv")
 ```
 
 ## Part II: QC and setting up for DESeq2
@@ -753,7 +759,7 @@ plot_pca(pca_df, 1, 2) +
   theme(legend.position = "bottom")
 ```
 
-* We can see additional patterns arise when we plot different PC axes.  Notably, when we plot PC1 and PC3, the MOV10 knockdown and control samples cluster together.  Interestingly, there is some odd behavior with one of the MOV10 over-expression samples on PC3 that may need to be investigated further.
+* We can see additional patterns arise when we plot different PC axes.  Notably, when we plot PC1 and PC3, the MOV10 knockdown and control samples cluster together.  Interestingly, there is some odd behavior with one of the MOV10 over-expression samples on PC3 that may need to be investigated further.ß
 
 #### Hierarchical Clustering for the MOV10 dataset
 
@@ -827,6 +833,46 @@ Below are the various design formulas that would be used to test for different e
 * Test for the effect of `genotype` on the `treatment` effects: `design <- ~ genotype + treatment + genotype:treatment`.  
 
 ### 5. Hypothesis testing and multiple testing correction
+
+* The next part of the analysis involves fitting the count data to the negative binomial, which models the raw counts of the gene as a function of the mean counts (normalized counts scaled by the sample-specific normalization factor; see above section of the median of ratios), and one dispersion term (RNA-seq data exhibit over-dispersion, or variance greater than the mean).
+
+* The negative binomial model is part of the Generalized Linear Model (GLM) family, whic generalizes linear regression models to allow for error distributions other than the normal distribution, and modeling the response variable as a function of the predictors using a link function.
+
+#### Hypothesis Testing
+
+* The resulting output from the `DESeq2` model is log2 fold changes.
+
+* The Wald test is used for hypothesis testing, the null hypothesis being the log2 fold change is 0, the alternative hypothesis being the log2 fold change is not zero.
+
+* The Wald test takes the log2 fold change and divides it by the associated standard error to create a z-statistic, which is then compared to a standard normal distribution (i.e., normal distribution with a mean of 0 and standard deviation of 1) to calculate a p-value.
+
+* Importantly, the Wald test is used when we are comparing two classes (e.g., treatment versus control), but the likelihood ration test can also be used as a hypothesis test when comparing more than two classes.
+
+* The likelihood ration test extends the capability of the hypothesis test by fitting two models per gene (while the Wald test fits one model per gene); a reduced model with the main factor in the design formula removed; and a full model, with the main factor in the design formula included.  In this case, we are comparing whether there is a significant difference in the fit between the full model and the reduced model.
+
+#### Exercise
+
+1) An appropriate hypothesis test to evaluate differences in gene expression across developmental stages would be the likelihood ratio test, since the ultimate aim is to compare gene expression across multiple time points.
+
+2) Below is the line of code to create the `dds` object.  Here, we would be primarily interested in understanding the interaction of sex and developmental stage on gene expression differences.  
+
+```{r create-dds-ex}
+# Code to create dds object
+DESeqDataSetFromTximport(txi, colData, 
+                         design = "~ sex + dev_stage + sex:dev_stage")
+
+```
+
+3) Below is the line of code used to run `DESeq2` with these data.  The full model would be the full design formula, where we are evaluating gene expression as a function of sex, developmental stage, and the interaction between sex and developmental stage (i.e., allowing male and female mice to have different gene expression profiles over time).  The reduced model would be just evaluating gene expression as a function of sex and developmental stage, essentially assuming that there are no differences in expression with sex.
+
+```{r run-deseq-ex}
+# Code to run DESeq
+DESeq(mouse_data, test = "LRT", 
+      reduced = ~ sex + dev_stage)
+```
+
+4) In this case, we could subset the `dds` object and perform a Wald test only comparing these two timepoints.  
+
 
 ## Part III: DESeq2
 
